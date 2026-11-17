@@ -114,6 +114,18 @@ object Store {
         false
     }
 
+    /** Crea il file di backup in una cartella condivisibile (per il pulsante "Condividi backup"). */
+    fun creaBackupCondivisibile(): File? = try {
+        val backup = Backup(misurazioni = _measurements.value, impostazioni = _thresholds.value)
+        val dir = File(ctx.cacheDir, "condivisione").apply { mkdirs() }
+        val nome = "backup_pressione_" + java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.ITALY).format(java.util.Date()) + ".json"
+        val f = File(dir, nome)
+        f.writeText(gson.toJson(backup))
+        f
+    } catch (e: Exception) {
+        null
+    }
+
     /** Importa un backup e unisce i dati a quelli esistenti (senza duplicati per id). */
     fun importJson(uri: Uri): Boolean = try {
         val testo = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return false
