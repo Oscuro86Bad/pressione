@@ -49,6 +49,18 @@ L'APK viene creato in `app\build\outputs\apk\debug\app-debug.apk`.
 - Dopo la foto controlla **sempre** i valori proposti prima di salvare: se qualcosa non torna, correggi a mano (i campi restano modificabili).
 - Se i valori non vengono letti correttamente, puoi rifare la foto oppure usarne una dalla galleria e inserire i valori manualmente.
 
+## Backup automatico su GitHub (consigliato contro lo smarrimento del telefono)
+
+Oltre al backup manuale su file, l'app può salvare una copia dei dati in un **gist privato** del tuo account GitHub, aggiornandolo automaticamente a ogni misurazione:
+
+1. Sul PC (o su github.com dal telefono): accedi e vai su **Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**.
+2. Assegna un nome (es. "Backup Pressione"), scegli una scadenza lunga e spunta **solo il permesso `gist`**.
+3. Copia il token (`ghp_…`): è visibile solo una volta.
+4. Nell'app: **Impostazioni → Backup su GitHub** → incolla il token → tocca **Salva token e backup**.
+5. Attiva **Backup automatico a ogni modifica**: da quel momento ogni misurazione salvata viene copiata su GitHub (se c'è connessione; altrimenti verrà copiata al prossimo backup).
+
+Il backup è un **gist privato**: visibile solo al tuo account. Su un telefono nuovo reinstalla l'app, incolla lo stesso token e tocca **Ripristina dal backup su GitHub**.
+
 ## Privacy e dati
 
 - Nessun permesso di rete richiesto: l'app funziona completamente offline.

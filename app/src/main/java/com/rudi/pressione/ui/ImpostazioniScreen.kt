@@ -18,24 +18,32 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.rudi.pressione.data.GitHubSync
 import com.rudi.pressione.data.Store
 import com.rudi.pressione.data.Thresholds
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,6 +51,9 @@ import java.util.Locale
 @Composable
 fun ImpostazioniScreen(toast: (String) -> Unit, modifier: Modifier = Modifier) {
     val soglie by Store.thresholds.collectAsState()
+    val syncImp by GitHubSync.impostazioni.collectAsState()
+    val syncStato by GitHubSync.stato.collectAsState()
+    val scope = rememberCoroutineScope()
 
     var sysAlta by remember(soglie) { mutableStateOf(soglie.sysHigh.toString()) }
     var sysBassa by remember(soglie) { mutableStateOf(soglie.sysLow.toString()) }
@@ -136,6 +147,110 @@ fun ImpostazioniScreen(toast: (String) -> Unit, modifier: Modifier = Modifier) {
         }
 
         Spacer(Modifier.height(24.dp))
+        Text("Backup su GitHub", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Copia automaticamente i dati su un gist privato del tuo account GitHub (visibile solo a te). " +
+                "Serve un \"Personal Access Token\" con permesso gist: su github.com → Impostazioni → Developer settings → Personal access tokens → Tokens (classic) → Generate new token, spunta \"gist\" e copia il token qui.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        var token by remember(syncImp) { mutableStateOf(syncImp.token) }
+        var auto by remember(syncImp) { mutableStateOf(syncImp.automatico) }
+        var mostraToken by remember { mutableStateOf(false) }
+        var confermaRipristino by remember { mutableStateOf(false) }
+
+        OutlinedTextField(
+            value = token,
+            onValueChange = { token = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("GitHub token (ghp_…)") },
+            visualTransformation = if (mostraToken) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                TextButton(onClick = { mostraToken = !mostraToken }) {
+                    Text(if (mostraToken) "Nascondi" else "Mostra")
+                }
+            },
+            singleLine = true
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Switch(
+                checked = auto,
+                onCheckedChange = {
+                    auto = it
+                    GitHubSync.salva(token, it)
+                },
+                enabled = token.isNotBlank()
+            )
+            Spacer(Modifier.width(10.dp))
+            Text("Backup automatico a ogni modifica")
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = {
+                    GitHubSync.salva(token, auto)
+                    scope.launch {
+                        val esito = GitHubSync.eseguiSincronizzazione()
+                        toast(if (esito == "OK") "Backup su GitHub riuscito" else esito)
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                enabled = token.isNotBlank()
+            ) { Text("Salva token e backup") }
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        val esito = GitHubSync.eseguiSincronizzazione()
+                        toast(if (esito == "OK") "Backup su GitHub riuscito" else esito)
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                enabled = GitHubSync.configurato
+            ) { Text("Backup adesso") }
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = { confermaRipristino = true },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = GitHubSync.configurato
+        ) {
+            Icon(Icons.Default.FileUpload, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Ripristina dal backup su GitHub")
+        }
+        syncStato?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (confermaRipristino) {
+            AlertDialog(
+                onDismissRequest = { confermaRipristino = false },
+                title = { Text("Ripristinare?") },
+                text = { Text("Scaricare il backup da GitHub e unirlo ai dati attuali del telefono?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confermaRipristino = false
+                        scope.launch {
+                            try {
+                                toast(if (GitHubSync.ripristina()) "Backup ripristinato" else "Errore durante il ripristino")
+                            } catch (e: Exception) {
+                                toast("Errore: ${e.message ?: "sconosciuto"}")
+                            }
+                        }
+                    }) { Text("Ripristina") }
+                },
+                dismissButton = { TextButton(onClick = { confermaRipristino = false }) { Text("Annulla") } }
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
         Text("Dati", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
@@ -174,7 +289,7 @@ fun ImpostazioniScreen(toast: (String) -> Unit, modifier: Modifier = Modifier) {
                     Text("Informazioni", style = MaterialTheme.typography.titleSmall)
                 }
                 Text(
-                    "Tutti i dati restano solo sul telefono: nessun account, nessun cloud, nessun abbonamento. Il riconoscimento delle foto avviene offline, il modello è incluso nell'app.",
+                    "Tutti i dati restano sul telefono. Senza configurare nulla l'app funziona completamente offline: nessun account, nessun abbonamento. Se attivi il backup su GitHub (opzionale), una copia dei dati viene salvata in un gist privato del tuo account. Il riconoscimento delle foto avviene sempre offline: il modello è incluso nell'app.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -184,7 +299,7 @@ fun ImpostazioniScreen(toast: (String) -> Unit, modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    "Pressione v1.0 — uso personale",
+                    "Pressione v1.1 — uso personale",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

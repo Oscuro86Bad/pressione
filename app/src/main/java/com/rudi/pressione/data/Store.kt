@@ -30,6 +30,7 @@ object Store {
             ?: emptyList()
         _thresholds.value = leggi("impostazioni.json", object : TypeToken<Thresholds>() {})
             ?: Thresholds()
+        GitHubSync.init(context)
     }
 
     private fun <T> leggi(nome: String, tipo: TypeToken<T>): T? = try {
@@ -49,6 +50,7 @@ object Store {
     fun add(m: Measurement) {
         _measurements.value = (_measurements.value + m).sortedByDescending { it.timestamp }
         scrivi("misurazioni.json", _measurements.value)
+        GitHubSync.dopoCambioDati()
     }
 
     fun update(m: Measurement) {
@@ -56,16 +58,35 @@ object Store {
             .map { if (it.id == m.id) m else it }
             .sortedByDescending { it.timestamp }
         scrivi("misurazioni.json", _measurements.value)
+        GitHubSync.dopoCambioDati()
     }
 
     fun delete(id: String) {
         _measurements.value = _measurements.value.filter { it.id != id }
         scrivi("misurazioni.json", _measurements.value)
+        GitHubSync.dopoCambioDati()
     }
 
     fun saveThresholds(t: Thresholds) {
         _thresholds.value = t
         scrivi("impostazioni.json", t)
+        GitHubSync.dopoCambioDati()
+    }
+
+    /** Applica un backup già caricato (da file o da GitHub), unendolo ai dati esistenti. */
+    fun applicaBackup(backup: Backup): Boolean = try {
+        val nuovi = backup.misurazioni ?: emptyList()
+        val esistenti = _measurements.value.associateBy { it.id }
+        val uniti = nuovi.filterNotNull().fold(esistenti) { acc, m -> acc + (m.id to m) }
+        _measurements.value = uniti.values.sortedByDescending { it.timestamp }
+        scrivi("misurazioni.json", _measurements.value)
+        backup.impostazioni?.let {
+            _thresholds.value = it
+            scrivi("impostazioni.json", it)
+        }
+        true
+    } catch (e: Exception) {
+        false
     }
 
     /** Esporta le misurazioni in CSV (separatore ';', con BOM per Excel in italiano). */
@@ -97,13 +118,7 @@ object Store {
     fun importJson(uri: Uri): Boolean = try {
         val testo = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return false
         val backup = gson.fromJson<Backup>(testo, object : TypeToken<Backup>() {}.type)
-        val nuovi = backup.misurazioni ?: emptyList()
-        val esistenti = _measurements.value.associateBy { it.id }
-        val uniti = nuovi.fold(esistenti) { acc, m -> if (m != null) acc + (m.id to m) else acc }
-        _measurements.value = uniti.values.sortedByDescending { it.timestamp }
-        scrivi("misurazioni.json", _measurements.value)
-        backup.impostazioni?.let { saveThresholds(it) }
-        true
+        if (applicaBackup(backup)) true else false
     } catch (e: Exception) {
         false
     }
