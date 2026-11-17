@@ -12,8 +12,9 @@ local.properties
 captures/
 .cxx/
 
+# Kotlin build logs
+.kotlin/
+
 # APK generati
 *.apk
 *.aab
-
-# Log errori Kotlin.kotlin/
