@@ -15,3 +15,5 @@ captures/
 # APK generati
 *.apk
 *.aab
+
+# Log errori Kotlin.kotlin/
